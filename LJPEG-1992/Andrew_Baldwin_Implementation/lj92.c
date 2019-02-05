@@ -553,7 +553,7 @@ static int parseScan(ljp* self) {
                 Px = (left + lastrow[col])>>1;break;
             }
         }
-        diff = nextdiff(self,Px);
+        diff = nextdiff(self);
         left = Px + diff;
         left = (u16) (left%65536);
         //printf("%d %d %d\n",c,diff,left);
