@@ -859,6 +859,36 @@ void createEncodeTable(lje* self) {
         printf("bits:%d,%d,%d\n",i,bits[i],codesize[i]);
     }
 #endif
+//adjust bits, this step is a must to remove a code with all ones
+//and fix bug of overriding SSSS-0 category with the code with all ones.
+int I = 17;
+while(1) {
+    if(bits[I] > 0) {
+        int J = I - 1;
+        do {
+            J = J - 1;
+        } while(bits[J] <= 0);
+        bits[I] = bits[I] - 2;
+        bits[I - 1] = bits[I - 1] + 1; 
+        bits[J + 1] = bits[J + 1] + 2;
+        bits[J] = bits [J] - 1;
+    } else {
+        I = I - 1;
+        if(I != 16) {
+            continue;
+        }
+        while(bits[I] == 0) {
+            I = I - 1;
+        }
+        bits[I] = bits[I] - 1;
+        break;
+    }  
+}
+#ifdef DEBUG
+for (int i=0;i<18;i++) {
+    printf("Adjusted bits:%d,%d,%d\n",i,bits[i],codesize[i]);
+}
+#endif
     int* huffval = self->huffval;
     int i=1;
     int k=0;
