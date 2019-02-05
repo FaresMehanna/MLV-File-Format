@@ -273,7 +273,7 @@ static int parseSof3(ljp* self) {
     return LJ92_ERROR_NONE;
 }
 
-static int parseBlock(ljp* self,int marker) {
+static int parseBlock(ljp* self) {
     self->ix += BEH(self->data[self->ix]);
     if (self->ix >= self->datalen) return LJ92_ERROR_CORRUPT;
     return LJ92_ERROR_NONE;
@@ -332,12 +332,11 @@ static int extend(ljp* self,int v,int t) {
 }
 #endif
 
-inline static int nextdiff(ljp* self, int Px) {
+inline static int nextdiff(ljp* self) {
 #ifdef SLOW_HUFF
     int t = decode(self);
     int diff = receive(self,t);
     diff = extend(self,diff,t);
-    //printf("%d %d %d %x\n",Px+diff,Px,diff,t);//,index,usedbits);
 #else
     u32 b = self->b;
     int cnt = self->cnt;
@@ -389,7 +388,6 @@ inline static int nextdiff(ljp* self, int Px) {
     self->cnt = cnt;
     self->ix = ix;
     //printf("%d %d\n",t,diff);
-    //printf("%d %d %d %x %x %d\n",Px+diff,Px,diff,t,index,usedbits);
 #ifdef DEBUG
 #endif
 #endif
@@ -421,7 +419,7 @@ static int parsePred6(ljp* self) {
     int linear;
 
     // First pixel
-    diff = nextdiff(self,0);
+    diff = nextdiff(self);
     Px = 1 << (self->bits-1);
     left = Px + diff;
     if (self->linearize)
@@ -434,7 +432,7 @@ static int parsePred6(ljp* self) {
     --write;
     int rowcount = self->x-1;
     while (rowcount--) {
-        diff = nextdiff(self,0);
+        diff = nextdiff(self);
         Px = left;
         left = Px + diff;
         if (self->linearize)
@@ -457,7 +455,7 @@ static int parsePred6(ljp* self) {
     //printf("%x %x\n",thisrow,lastrow);
     while (c<pixels) {
         col = 0;
-        diff = nextdiff(self,0);
+        diff = nextdiff(self);
         Px = lastrow[col]; // Use value above for first pixel in row
         left = Px + diff;
         if (self->linearize) {
@@ -475,7 +473,7 @@ static int parsePred6(ljp* self) {
             write = self->writelen;
         }
         while (rowcount--) {
-            diff = nextdiff(self,0);
+            diff = nextdiff(self);
             Px = lastrow[col] + ((left - lastrow[col-1])>>1);
             left = Px + diff;
             //printf("%d %d %d %d %d %x\n",col,diff,left,lastrow[col],lastrow[col-1],&lastrow[col]);
@@ -592,7 +590,7 @@ static int parseImage(ljp* self) {
         else if (nextMarker == 0xc3)
             ret = parseSof3(self);
         else if (nextMarker == 0xfe)// Comment
-            ret = parseBlock(self,nextMarker);
+            ret = parseBlock(self);
         else if (nextMarker == 0xd9) // End of image
             break;
         else if (nextMarker == 0xda) {
@@ -603,7 +601,7 @@ static int parseImage(ljp* self) {
             ret = LJ92_ERROR_CORRUPT;
             break;
         } else
-            ret = parseBlock(self,nextMarker);
+            ret = parseBlock(self);
         if (ret != LJ92_ERROR_NONE) break;
     }
     return ret;
@@ -939,16 +937,6 @@ void writeHeader(lje* self) {
     int w = self->encodedWritten;
     uint8_t* e = self->encoded;
     e[w++] = 0xff; e[w++] = 0xd8; //SOI
-    e[w++] = 0xff; e[w++] = 0xc3; //SOF3
-        // Write SOF
-        e[w++] = 0x0; e[w++] = 11; //Lf, frame header length
-        e[w++] = self->bitdepth;
-        e[w++] = self->height>>8; e[w++] = self->height&0xFF;
-        e[w++] = self->width>>8; e[w++] = self->width&0xFF;
-        e[w++] = 1; // Components
-        e[w++] = 0; // Component ID
-        e[w++] = 0x11; // Component X/Y
-        e[w++] = 0; // Unused (Quantisation)
     e[w++] = 0xff; e[w++] = 0xc4; //HUFF
     // Write HUFF
         int count = 0;
@@ -963,6 +951,16 @@ void writeHeader(lje* self) {
         for (int i=0;i<count;i++) {
             e[w++] = self->huffval[i];
         }
+    e[w++] = 0xff; e[w++] = 0xc3; //SOF3
+        // Write SOF
+        e[w++] = 0x0; e[w++] = 11; //Lf, frame header length
+        e[w++] = self->bitdepth;
+        e[w++] = self->height>>8; e[w++] = self->height&0xFF;
+        e[w++] = self->width>>8; e[w++] = self->width&0xFF;
+        e[w++] = 1; // Components
+        e[w++] = 0; // Component ID
+        e[w++] = 0x11; // Component X/Y
+        e[w++] = 0; // Unused (Quantisation)
     e[w++] = 0xff; e[w++] = 0xda; //SCAN
     // Write SCAN
         e[w++] = 0x0; e[w++] = 8; //Ls, scan header length
@@ -982,7 +980,7 @@ void writePost(lje* self) {
     self->encodedWritten = w;
 }
 
-void writeBody(lje* self) {
+int writeBody(lje* self) {
     // Scan through the tile using the standard type 6 prediction
     // Need to cache the previous 2 row in target coordinates because of tiling
     uint16_t* pixel = self->image;
@@ -1043,6 +1041,11 @@ void writeBody(lje* self) {
             huffbits -= usebits;
             huffenc &= (1<<huffbits)-1;
             if (nextbits==0) {
+                if(w >= self->encodedLength - 1)
+                {
+                    free(rowcache);
+                    return LJ92_ERROR_ENCODER;
+                }
                 out[w++] = next;
                 if (next==0xff) out[w++] = 0x0;
                 next = 0;
@@ -1060,6 +1063,11 @@ void writeBody(lje* self) {
             ssss -= usebits;
             diff &= (1<<ssss)-1;
             if (nextbits==0) {
+                if(w >= self->encodedLength - 1)
+                {
+                    free(rowcache);
+                    return LJ92_ERROR_ENCODER;
+                }
                 out[w++] = next;
                 if (next==0xff) out[w++] = 0x0;
                 next = 0;
@@ -1095,6 +1103,7 @@ void writeBody(lje* self) {
 #endif
     free(rowcache);
     self->encodedWritten = w;
+    return LJ92_ERROR_NONE;
 }
 /* Encoder
  * Read tile from an image and encode in one shot
@@ -1131,7 +1140,12 @@ int lj92_encode(uint16_t* image, int width, int height, int bitdepth,
     // Write JPEG head and scan header
     writeHeader(self);
     // Scan through and do the compression
-    writeBody(self);
+    ret = writeBody(self);
+    if (ret != LJ92_ERROR_NONE) {
+        free(self->encoded);
+        free(self);
+        return ret;
+    }
     // Finish
     writePost(self);
 #ifdef DEBUG
