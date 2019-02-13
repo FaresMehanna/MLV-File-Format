@@ -38,7 +38,6 @@ class buffer_stage_sequential(Module):
 		# end_out_signal, is there is no data to output?
 		# end_in must be high and no data in the buffers to set end_out to 1
 		self.end_out = end_out = Signal(reset=0) 
-		self.end_out_helper = end_out_helper = Signal(reset=0) 
 
 		# I/O pins
 		self.ios =	{_ for _ in pixels_input} | \
@@ -133,7 +132,7 @@ class buffer_stage_sequential(Module):
 					).Else(
 						paused_store.eq(0),
 					)
-					
+
 		self.sync += If(~paused_store,
 						cached_pixels_cache.eq(mem_read_port.dat_r),
 					)
