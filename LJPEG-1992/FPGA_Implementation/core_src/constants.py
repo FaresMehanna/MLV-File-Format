@@ -13,4 +13,4 @@ VIDEO_MAX_BIT_DEPTH = 12
 # If buffer_stage_bayer used, NUM_IO_PIXELS must be also multiple of four
 NUM_IO_PIXELS = 16
 
-ROW_STEPS = int(ENCODER_VIDEO_WIDTH/NUM_IO_PIXELS)
+ROW_STEPS = int(ENCODER_VIDEO_WIDTH/NUM_IO_PIXELS)	#32
