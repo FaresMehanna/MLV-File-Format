@@ -41,18 +41,14 @@ module top(
 	input sys_rst
 );
 
-reg [5:0] mem_write_port1_adr = 6'd0;
-wire [95:0] mem_write_port1_dat_r;
-reg mem_write_port1_we = 1'd0;
-reg [95:0] mem_write_port1_dat_w = 96'd0;
-wire [5:0] mem_read_port1_adr;
-wire [95:0] mem_read_port1_dat_r;
-reg [5:0] mem_write_port2_adr = 6'd0;
-wire [95:0] mem_write_port2_dat_r;
-reg mem_write_port2_we = 1'd0;
-reg [95:0] mem_write_port2_dat_w = 96'd0;
-wire [5:0] mem_read_port2_adr;
-wire [95:0] mem_read_port2_dat_r;
+reg [5:0] mem_rw_port1_adr = 6'd0;
+wire [95:0] mem_rw_port1_dat_r;
+reg mem_rw_port1_we = 1'd0;
+reg [95:0] mem_rw_port1_dat_w = 96'd0;
+reg [5:0] mem_rw_port2_adr = 6'd0;
+wire [95:0] mem_rw_port2_dat_r;
+reg mem_rw_port2_we = 1'd0;
+reg [95:0] mem_rw_port2_dat_w = 96'd0;
 reg [6:0] move_mem_write_port1_adr = 7'd0;
 wire [5:0] move_mem_write_port1_dat_r;
 reg move_mem_write_port1_we = 1'd0;
@@ -67,7 +63,7 @@ wire [6:0] move_mem_read_port2_adr;
 wire [5:0] move_mem_read_port2_dat_r;
 reg [6:0] input_counter = 7'd0;
 reg first_burst = 1'd1;
-reg [4:0] last_buff_counter = 5'd0;
+reg [5:0] last_buff_counter = 6'd0;
 reg [95:0] pixels_output_f_cache = 96'd0;
 reg [95:0] pixels_output_s_cache = 96'd0;
 reg paused_store = 1'd0;
@@ -82,8 +78,6 @@ initial dummy_s <= 1'd0;
 
 assign move_mem_read_port1_adr = input_counter;
 assign move_mem_read_port2_adr = (input_counter | 1'd1);
-assign mem_read_port1_adr = move_mem_read_port1_dat_r;
-assign mem_read_port2_adr = move_mem_read_port2_dat_r;
 
 // synthesis translate_off
 reg dummy_d;
@@ -97,20 +91,6 @@ always @(*) begin
 	pixels_output_5 <= 12'd0;
 	pixels_output_6 <= 12'd0;
 	pixels_output_7 <= 12'd0;
-	if ((~paused_store)) begin
-		{pixels_output_7, pixels_output_6, pixels_output_5, pixels_output_4, pixels_output_3, pixels_output_2, pixels_output_1, pixels_output} <= mem_read_port1_dat_r;
-	end else begin
-		{pixels_output_7, pixels_output_6, pixels_output_5, pixels_output_4, pixels_output_3, pixels_output_2, pixels_output_1, pixels_output} <= pixels_output_f_cache;
-	end
-// synthesis translate_off
-	dummy_d <= dummy_s;
-// synthesis translate_on
-end
-
-// synthesis translate_off
-reg dummy_d_1;
-// synthesis translate_on
-always @(*) begin
 	pixels_output_8 <= 12'd0;
 	pixels_output_9 <= 12'd0;
 	pixels_output_10 <= 12'd0;
@@ -120,30 +100,32 @@ always @(*) begin
 	pixels_output_14 <= 12'd0;
 	pixels_output_15 <= 12'd0;
 	if ((~paused_store)) begin
-		{pixels_output_15, pixels_output_14, pixels_output_13, pixels_output_12, pixels_output_11, pixels_output_10, pixels_output_9, pixels_output_8} <= mem_read_port2_dat_r;
+		{pixels_output_7, pixels_output_6, pixels_output_5, pixels_output_4, pixels_output_3, pixels_output_2, pixels_output_1, pixels_output} <= mem_rw_port1_dat_r;
+		{pixels_output_15, pixels_output_14, pixels_output_13, pixels_output_12, pixels_output_11, pixels_output_10, pixels_output_9, pixels_output_8} <= mem_rw_port2_dat_r;
 	end else begin
+		{pixels_output_7, pixels_output_6, pixels_output_5, pixels_output_4, pixels_output_3, pixels_output_2, pixels_output_1, pixels_output} <= pixels_output_f_cache;
 		{pixels_output_15, pixels_output_14, pixels_output_13, pixels_output_12, pixels_output_11, pixels_output_10, pixels_output_9, pixels_output_8} <= pixels_output_s_cache;
 	end
 // synthesis translate_off
-	dummy_d_1 <= dummy_s;
+	dummy_d <= dummy_s;
 // synthesis translate_on
 end
 
 always @(posedge sys_clk) begin
 	if ((~pause_signal)) begin
-		if (input_valid) begin
+		if ((input_valid | end_in)) begin
 			input_counter <= (input_counter + 2'd2);
 		end
 	end
-	first_burst <= (first_burst & (input_counter != 6'd60));
+	first_burst <= (first_burst & (input_counter != 6'd62));
 	if ((~pause_signal)) begin
 		if (input_valid) begin
-			mem_write_port1_we <= 1'd1;
-			mem_write_port1_dat_w <= {pixels_input_13, pixels_input_12, pixels_input_9, pixels_input_8, pixels_input_5, pixels_input_4, pixels_input_1, pixels_input};
-			mem_write_port1_adr <= move_mem_read_port1_dat_r;
-			mem_write_port2_we <= 1'd1;
-			mem_write_port2_dat_w <= {pixels_input_15, pixels_input_14, pixels_input_11, pixels_input_10, pixels_input_7, pixels_input_6, pixels_input_3, pixels_input_2};
-			mem_write_port2_adr <= move_mem_read_port2_dat_r;
+			mem_rw_port1_we <= 1'd1;
+			mem_rw_port1_dat_w <= {pixels_input_13, pixels_input_12, pixels_input_9, pixels_input_8, pixels_input_5, pixels_input_4, pixels_input_1, pixels_input};
+			mem_rw_port1_adr <= move_mem_read_port1_dat_r;
+			mem_rw_port2_we <= 1'd1;
+			mem_rw_port2_dat_w <= {pixels_input_15, pixels_input_14, pixels_input_11, pixels_input_10, pixels_input_7, pixels_input_6, pixels_input_3, pixels_input_2};
+			mem_rw_port2_adr <= move_mem_read_port2_dat_r;
 			output_valid <= (1'd1 & (~first_burst));
 			move_mem_write_port1_we <= 1'd1;
 			move_mem_write_port2_we <= 1'd1;
@@ -157,19 +139,20 @@ always @(posedge sys_clk) begin
 	end
 	if ((~pause_signal)) begin
 		if (end_in) begin
-			if ((last_buff_counter == 5'd31)) begin
+			if ((last_buff_counter == 6'd32)) begin
 				end_out <= 1'd1;
 				output_valid <= 1'd0;
 			end else begin
-				input_counter <= (input_counter + 2'd2);
 				last_buff_counter <= (last_buff_counter + 1'd1);
 				output_valid <= 1'd1;
+				mem_rw_port1_adr <= move_mem_read_port1_dat_r;
+				mem_rw_port2_adr <= move_mem_read_port2_dat_r;
 			end
 		end
 	end
 	if (((pause_signal | end_in) | (~input_valid))) begin
-		mem_write_port1_we <= 1'd0;
-		mem_write_port2_we <= 1'd0;
+		mem_rw_port1_we <= 1'd0;
+		mem_rw_port2_we <= 1'd0;
 		move_mem_write_port1_we <= 1'd0;
 		move_mem_write_port2_we <= 1'd0;
 	end
@@ -179,18 +162,18 @@ always @(posedge sys_clk) begin
 		paused_store <= 1'd0;
 	end
 	if ((~paused_store)) begin
-		pixels_output_f_cache <= mem_read_port1_dat_r;
-		pixels_output_s_cache <= mem_read_port2_dat_r;
+		pixels_output_f_cache <= mem_rw_port1_dat_r;
+		pixels_output_s_cache <= mem_rw_port2_dat_r;
 	end
 	if (sys_rst) begin
 		output_valid <= 1'd0;
 		end_out <= 1'd0;
-		mem_write_port1_adr <= 6'd0;
-		mem_write_port1_we <= 1'd0;
-		mem_write_port1_dat_w <= 96'd0;
-		mem_write_port2_adr <= 6'd0;
-		mem_write_port2_we <= 1'd0;
-		mem_write_port2_dat_w <= 96'd0;
+		mem_rw_port1_adr <= 6'd0;
+		mem_rw_port1_we <= 1'd0;
+		mem_rw_port1_dat_w <= 96'd0;
+		mem_rw_port2_adr <= 6'd0;
+		mem_rw_port2_we <= 1'd0;
+		mem_rw_port2_dat_w <= 96'd0;
 		move_mem_write_port1_adr <= 7'd0;
 		move_mem_write_port1_we <= 1'd0;
 		move_mem_write_port1_dat_w <= 6'd0;
@@ -199,7 +182,7 @@ always @(posedge sys_clk) begin
 		move_mem_write_port2_dat_w <= 6'd0;
 		input_counter <= 7'd0;
 		first_burst <= 1'd1;
-		last_buff_counter <= 5'd0;
+		last_buff_counter <= 6'd0;
 		pixels_output_f_cache <= 96'd0;
 		pixels_output_s_cache <= 96'd0;
 		paused_store <= 1'd0;
@@ -207,44 +190,32 @@ always @(posedge sys_clk) begin
 end
 
 reg [95:0] mem[0:63];
-reg [5:0] memadr;
-reg [5:0] memadr_1;
 always @(posedge sys_clk) begin
-	if (mem_write_port1_we)
-		mem[mem_write_port1_adr] <= mem_write_port1_dat_w;
-	memadr <= mem_write_port1_adr;
+	if (mem_rw_port1_we)
+		mem[mem_rw_port1_adr] <= mem_rw_port1_dat_w;
 end
 
 always @(posedge sys_clk) begin
+	if (mem_rw_port2_we)
+		mem[mem_rw_port2_adr] <= mem_rw_port2_dat_w;
 end
 
-always @(posedge sys_clk) begin
-	if (mem_write_port2_we)
-		mem[mem_write_port2_adr] <= mem_write_port2_dat_w;
-	memadr_1 <= mem_write_port2_adr;
-end
-
-always @(posedge sys_clk) begin
-end
-
-assign mem_write_port1_dat_r = mem[memadr];
-assign mem_read_port1_dat_r = mem[mem_read_port1_adr];
-assign mem_write_port2_dat_r = mem[memadr_1];
-assign mem_read_port2_dat_r = mem[mem_read_port2_adr];
+assign mem_rw_port1_dat_r = mem[mem_rw_port1_adr];
+assign mem_rw_port2_dat_r = mem[mem_rw_port2_adr];
 
 reg [5:0] move_mem[0:127];
-reg [6:0] memadr_2;
-reg [6:0] memadr_3;
+reg [6:0] memadr;
+reg [6:0] memadr_1;
 always @(posedge sys_clk) begin
 	if (move_mem_write_port1_we)
 		move_mem[move_mem_write_port1_adr] <= move_mem_write_port1_dat_w;
-	memadr_2 <= move_mem_write_port1_adr;
+	memadr <= move_mem_write_port1_adr;
 end
 
 always @(posedge sys_clk) begin
 	if (move_mem_write_port2_we)
 		move_mem[move_mem_write_port2_adr] <= move_mem_write_port2_dat_w;
-	memadr_3 <= move_mem_write_port2_adr;
+	memadr_1 <= move_mem_write_port2_adr;
 end
 
 always @(posedge sys_clk) begin
@@ -253,8 +224,8 @@ end
 always @(posedge sys_clk) begin
 end
 
-assign move_mem_write_port1_dat_r = move_mem[memadr_2];
-assign move_mem_write_port2_dat_r = move_mem[memadr_3];
+assign move_mem_write_port1_dat_r = move_mem[memadr];
+assign move_mem_write_port2_dat_r = move_mem[memadr_1];
 assign move_mem_read_port1_dat_r = move_mem[move_mem_read_port1_adr];
 assign move_mem_read_port2_dat_r = move_mem[move_mem_read_port2_adr];
 

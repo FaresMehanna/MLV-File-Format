@@ -123,18 +123,16 @@ class bayer_to_sequence(Module):
 		# data buffers #
 		# main buffer
 		self.specials.mem = Memory(int(constants.VIDEO_MAX_BIT_DEPTH*constants.NUM_IO_PIXELS/2), constants.ROW_STEPS*2)
-		self.mem_write_port1 = mem_write_port1 = self.mem.get_port(write_capable=True)
-		self.mem_read_port1 = mem_read_port1 = self.mem.get_port(async_read=True)
-		self.mem_write_port2 = mem_write_port2 = self.mem.get_port(write_capable=True)
-		self.mem_read_port2 = mem_read_port2 = self.mem.get_port(async_read=True)
-		self.specials += mem_write_port1, mem_read_port1, mem_write_port2, mem_read_port2
+		self.mem_rw_port1 = mem_rw_port1 = self.mem.get_port(write_capable=True, async_read=True)
+		self.mem_rw_port2 = mem_rw_port2 = self.mem.get_port(write_capable=True, async_read=True)
+		self.specials += mem_rw_port1, mem_rw_port2
 
 
 		'''
 		This was the original way, it was cleaner but take more memory when
 		constants.ROW_STEPS increases. it was replaced with a dynamic method
 		that is guaranteed to take 4 x constants.ROW_STEPS memory with 
-		(log(constants.ROW_STEPS,2)+1) bits in each slot.
+		(lg(constants.ROW_STEPS,2)+1) bits in each slot.
 		'''
 		# data movement buffer
 		# self.specials.move_mem = Memory(int(math.log(constants.ROW_STEPS,2)) + 1, len(indices(constants.ROW_STEPS)), init=indices(constants.ROW_STEPS))
@@ -157,7 +155,7 @@ class bayer_to_sequence(Module):
 		self.first_burst = first_burst = Signal(reset=1)
 
 		#last buffer counter
-		self.last_buff_counter = last_buff_counter = Signal(int(math.log(constants.ROW_STEPS,2)), reset=0)
+		self.last_buff_counter = last_buff_counter = Signal(int(math.log(constants.ROW_STEPS,2)+1), reset=0)
 
 		#pause signal handling
 		self.pixels_output_f_cache = pixels_output_f_cache = Signal(int(constants.VIDEO_MAX_BIT_DEPTH*constants.NUM_IO_PIXELS/2))
@@ -166,25 +164,25 @@ class bayer_to_sequence(Module):
 
 		#handle the counter
 		self.sync += If(~pause_signal,
-						If(input_valid,
+						If(input_valid | end_in,
 							input_counter.eq(input_counter + 2),
 						)
 					)
 
 		#handle first burst when data output is invalid
-		self.sync += first_burst.eq(first_burst & (input_counter != ((constants.ROW_STEPS*2)-4)))
+		self.sync += first_burst.eq(first_burst & (input_counter != ((constants.ROW_STEPS*2)-2)))
 
 		#handle the data
 		self.sync += If(~pause_signal,
 						# get the input
 						If(input_valid,
-							mem_write_port1.we.eq(1),
-							mem_write_port1.dat_w.eq(Cat(pixels_input_f)),
-							mem_write_port1.adr.eq(move_mem_read_port1.dat_r),
+							mem_rw_port1.we.eq(1),
+							mem_rw_port1.dat_w.eq(Cat(pixels_input_f)),
+							mem_rw_port1.adr.eq(move_mem_read_port1.dat_r),
 							#write second half of the data to higher memory
-							mem_write_port2.we.eq(1),
-							mem_write_port2.dat_w.eq(Cat(pixels_input_s)),
-							mem_write_port2.adr.eq(move_mem_read_port2.dat_r),
+							mem_rw_port2.we.eq(1),
+							mem_rw_port2.dat_w.eq(Cat(pixels_input_s)),
+							mem_rw_port2.adr.eq(move_mem_read_port2.dat_r),
 							#output is valid
 							output_valid.eq(1 & (~first_burst)),
 							#write movement data
@@ -204,16 +202,17 @@ class bayer_to_sequence(Module):
 		self.sync += If(~pause_signal,
 						If(end_in,
 							#if no more data in internal buffer, signal end_out
-							If(last_buff_counter == constants.ROW_STEPS - 1,
+							If(last_buff_counter == constants.ROW_STEPS,
 								end_out.eq(1),
 								output_valid.eq(0),
 							).Else(
-								#increase counter by two
-								input_counter.eq(input_counter + 2),
 								#increase last_buff counter
 								last_buff_counter.eq(last_buff_counter + 1),
 								#output the data
 								output_valid.eq(1),
+								#read from read-write ports
+								mem_rw_port1.adr.eq(move_mem_read_port1.dat_r),
+								mem_rw_port2.adr.eq(move_mem_read_port2.dat_r),
 							)
 						)
 					)
@@ -221,26 +220,20 @@ class bayer_to_sequence(Module):
 		#handle memories
 		self.sync += If(pause_signal | end_in | ~input_valid,
 						#turn off writing to memories
-						mem_write_port1.we.eq(0),
-						mem_write_port2.we.eq(0),
+						mem_rw_port1.we.eq(0),
+						mem_rw_port2.we.eq(0),
 						move_mem_write_port1.we.eq(0),
 						move_mem_write_port2.we.eq(0),
 					)
 
-
 		#data output
 		self.comb += move_mem_read_port1.adr.eq(input_counter)
 		self.comb += move_mem_read_port2.adr.eq(input_counter|1)
-		self.comb += mem_read_port1.adr.eq(move_mem_read_port1.dat_r)
-		self.comb += mem_read_port2.adr.eq(move_mem_read_port2.dat_r)
 		self.comb += If(~paused_store,
-						Cat(pixels_output_f).eq(mem_read_port1.dat_r),
+						Cat(pixels_output_f).eq(mem_rw_port1.dat_r),
+						Cat(pixels_output_s).eq(mem_rw_port2.dat_r)
 					).Else(
 						Cat(pixels_output_f).eq(pixels_output_f_cache),
-					)
-		self.comb += If(~paused_store,
-						Cat(pixels_output_s).eq(mem_read_port2.dat_r)
-					).Else(
 						Cat(pixels_output_s).eq(pixels_output_s_cache),
 					)
 
@@ -251,8 +244,8 @@ class bayer_to_sequence(Module):
 						paused_store.eq(0),
 					)
 		self.sync += If(~paused_store,
-						pixels_output_f_cache.eq(mem_read_port1.dat_r),
-						pixels_output_s_cache.eq(mem_read_port2.dat_r),
+						pixels_output_f_cache.eq(mem_rw_port1.dat_r),
+						pixels_output_s_cache.eq(mem_rw_port2.dat_r),
 					)
 
 if __name__ == "__main__":

@@ -62,13 +62,13 @@ def bayer_to_sequence_first_row_test(dut):
 		#Clk
 		yield
 		CLK +=1
-		if i < constants.ROW_STEPS:
+		if i <= constants.ROW_STEPS:
 			assert (yield dut.output_valid) == 0, "Error in value of output_valid in step: " + str(i)
 		else:
 			assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-			assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(i)
+			assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(i)
 	
-	for i in range(constants.ROW_STEPS):
+	for i in range(constants.ROW_STEPS+1):
 		#set input
 		yield dut.input_valid.eq(1)
 		yield dut.pause_signal.eq(0)
@@ -77,7 +77,7 @@ def bayer_to_sequence_first_row_test(dut):
 		yield
 		CLK +=1
 		assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-		assert (yield dut.pixels_output) == img[i+constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(i)
+		assert (yield dut.pixels_output) == img[i+constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(i)
 
 	print("bayer_to_sequence first_row_test: succeeded.")
 
@@ -109,9 +109,9 @@ def bayer_to_sequence_full_image_test(dut):
 		CLK +=1
 
 		assert (yield dut.end_out) == 0, "Error in value of end_out in step: " + str(i)
-		if i >= constants.ROW_STEPS:
+		if i > constants.ROW_STEPS:
 			assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-			assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(i)
+			assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(i)
 			reads += 1
 	#signal end
 	yield dut.input_valid.eq(0)
@@ -119,15 +119,15 @@ def bayer_to_sequence_full_image_test(dut):
 	yield dut.end_in.eq(1)
 
 	#check last bits of data
-	for i in range(constants.ROW_STEPS):
+	for i in range(constants.ROW_STEPS+1):
 
 		#Clk
 		yield
 		CLK +=1
 
 		assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-		assert (yield dut.pixels_output) == img[i+img_size-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(CLK-1)
 		assert (yield dut.end_out) == 0, "Error in value of end_out in step: " + str(CLK-1)
+		assert (yield dut.pixels_output) == img[i+img_size-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(CLK-1)
 		reads += 1
 	#Clk
 	yield
@@ -162,7 +162,7 @@ def bayer_to_sequence_full_image_test_random_pauses(dut):
 		writes += 1
 
 		#random pauses
-		if random.randint(0,100) < 20:
+		if random.randint(0,100) < 50:
 			yield dut.pause_signal.eq(1)
 			yield
 			yield
@@ -171,7 +171,7 @@ def bayer_to_sequence_full_image_test_random_pauses(dut):
 			assert (yield dut.end_out) == 0, "Error in value of end_out in step: " + str(i)
 			if i > constants.ROW_STEPS:
 				assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-				assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(i)
+				assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(i)
 			yield
 			yield
 			# pixels input
@@ -185,9 +185,9 @@ def bayer_to_sequence_full_image_test_random_pauses(dut):
 		CLK +=1
 
 		assert (yield dut.end_out) == 0, "Error in value of end_out in step: " + str(i)
-		if i >= constants.ROW_STEPS:
+		if i > constants.ROW_STEPS:
 			assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-			assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(i)
+			assert (yield dut.pixels_output) == img[i-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(i)
 			reads += 1
 
 	#signal end
@@ -196,10 +196,10 @@ def bayer_to_sequence_full_image_test_random_pauses(dut):
 	yield dut.end_in.eq(1)
 
 	#check last bits of data
-	for i in range(constants.ROW_STEPS):
+	for i in range(constants.ROW_STEPS + 1):
 
 		#random pauses
-		if random.randint(0,100) < 10:
+		if random.randint(0,100) < 50:
 			yield dut.pause_signal.eq(1)
 			yield
 			yield
@@ -208,7 +208,7 @@ def bayer_to_sequence_full_image_test_random_pauses(dut):
 			yield
 			yield
 			assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-			assert (yield dut.pixels_output) == img[i+img_size-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(CLK-1)
+			assert (yield dut.pixels_output) == img[i+img_size-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(CLK-1)
 			assert (yield dut.end_out) == 0, "Error in value of end_out in step: " + str(CLK-1)
 			yield
 			yield
@@ -223,7 +223,7 @@ def bayer_to_sequence_full_image_test_random_pauses(dut):
 		CLK +=1
 
 		assert (yield dut.output_valid) == 1, "Error in value of output_valid in step: " + str(i)
-		assert (yield dut.pixels_output) == img[i+img_size-constants.ROW_STEPS], "Error in value of pixels_output in step: " + str(CLK-1)
+		assert (yield dut.pixels_output) == img[i+img_size-constants.ROW_STEPS-1], "Error in value of pixels_output in step: " + str(CLK-1)
 		assert (yield dut.end_out) == 0, "Error in value of end_out in step: " + str(CLK-1)
 		reads += 1
 
