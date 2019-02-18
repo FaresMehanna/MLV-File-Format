@@ -436,6 +436,7 @@ static int parsePred6(ljp* self) {
         diff = nextdiff(self);
         Px = left;
         left = Px + diff;
+        left = (u16) (left%65536);
         if (self->linearize)
             linear = self->linearize[left];
         else
